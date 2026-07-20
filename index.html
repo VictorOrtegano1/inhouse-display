@@ -17,8 +17,8 @@
 
     .logo {
         position: absolute;
-        width: 460px;
-        height: 220px;
+        width: 520px;
+        height: 240px;
         z-index: 10;
         transform-style: preserve-3d;
         display: none;
@@ -41,19 +41,17 @@
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         transform-style: preserve-3d;
-        font-family: 'Arial Black', Arial, Helvetica, sans-serif;
+        font-family: 'Arial Black', 'Arial Bold', Arial, Helvetica, sans-serif;
         white-space: nowrap; line-height: 1;
     }
-    .line1 { font-size: 92px; font-weight: 900; letter-spacing: 3px; }
-    .line2 { font-size: 34px; font-weight: 700; letter-spacing: 20px; margin-top: 10px; padding-left: 20px; }
-
-    .confetti-piece { position: fixed; pointer-events: none; z-index: 600; }
+    .line1 { font-size: 100px; font-weight: 900; letter-spacing: 2px; }
+    .line2 { font-size: 36px; font-weight: 900; letter-spacing: 16px; margin-top: 10px; padding-left: 16px; }
 
     #corner-hit-text {
         position: fixed; top: 90px; left: 50%; transform: translateX(-50%);
-        color: #ffff00; font-family: 'Arial Black', sans-serif; font-size: 28px;
+        color: #ffff00; font-family: 'Arial Black', sans-serif; font-size: 30px;
         text-align: center; opacity: 0; pointer-events: none; z-index: 700;
-        transition: opacity .2s; text-shadow: 0 0 16px #ffff00;
+        transition: opacity .25s; text-shadow: 0 0 16px #ffff00;
     }
 </style>
 </head>
@@ -81,7 +79,8 @@
     function easeOutBack(t) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t-1, 3) + c1 * Math.pow(t-1, 2); }
 
     // ================= 3D TEXT =================
-    var DEPTH = 34, SLICE = 1.6;
+    // Fewer, thicker slices = lighter for the TV and a chunkier, bolder look.
+    var DEPTH = 16, SLICE = 2.4, STROKE = '3px';
     var text3d = document.getElementById('text3d');
 
     function buildText() {
@@ -104,11 +103,13 @@
         for (var i = 0; i < layers.length; i++) {
             var layer = layers[i];
             var t = parseFloat(layer.getAttribute('data-depth'));
+            var col = layer.getAttribute('data-face') === '1' ? hex : shade(hex, 0.62 - t * 0.5);
+            layer.style.color = col;
+            // stroke in the SAME colour thickens the glyphs so they never look skinny
+            layer.style.webkitTextStroke = STROKE + ' ' + col;
             if (layer.getAttribute('data-face') === '1') {
-                layer.style.color = hex;
-                layer.style.textShadow = isWhite ? '0 0 6px rgba(0,0,0,.4)' : '0 0 16px rgba(255,255,255,.6)';
+                layer.style.textShadow = isWhite ? '0 0 6px rgba(0,0,0,.4)' : '0 0 18px rgba(255,255,255,.65)';
             } else {
-                layer.style.color = shade(hex, 0.62 - t * 0.5);
                 layer.style.textShadow = 'none';
             }
         }
@@ -122,71 +123,25 @@
     }
     function p2(n) { var s = n.toString(16); return s.length < 2 ? '0' + s : s; }
 
-    // ================= CONFETTI (requestAnimationFrame only) =================
-    var CONFETTI_COLORS = ['#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff',
-        '#ff6600','#ff0066','#6600ff','#00ff66','#ffffff','#12403c',
-        '#ffd700','#ff1493','#7fff00','#00bfff','#ff4500','#adff2f'];
-    var confetti = [], confettiRunning = false;
-    function makePiece(x, y, angle, speed) {
-        var el = document.createElement('div');
-        el.className = 'confetti-piece';
-        var shp = Math.random(), w, h, br;
-        if (shp < 0.34) { w = h = Math.random()*14+5; br = '2px'; }
-        else if (shp < 0.67) { w = Math.random()*22+8; h = Math.random()*10+4; br = '1px'; }
-        else { w = h = Math.random()*12+5; br = '50%'; }
-        el.style.width = w+'px'; el.style.height = h+'px'; el.style.borderRadius = br;
-        el.style.background = CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)];
-        el.style.left = '0px'; el.style.top = '0px';
-        document.body.appendChild(el);
-        return { el:el, x:x, y:y,
-            vx: Math.cos(angle)*speed + (Math.random()-0.5)*3,
-            vy: Math.sin(angle)*speed,
-            rot: Math.random()*360, vr: (Math.random()-0.5)*40,
-            drag: 0.985 + Math.random()*0.01, life: 0,
-            maxLife: 220 + Math.random()*160, sway: Math.random()*Math.PI*2 };
-    }
-    function burst(cx, cy, count, power) {
-        for (var i = 0; i < count; i++) {
-            var angle = Math.random()*Math.PI*2;
-            var speed = Math.random()*power + power*0.25;
-            confetti.push(makePiece(cx, cy, angle, speed));
-        }
-        startConfetti();
-    }
-    function startConfetti() { if (confettiRunning) return; confettiRunning = true; RAF(stepConfetti); }
-    var GRAVITY = 0.35;
-    function stepConfetti() {
-        for (var i = confetti.length-1; i >= 0; i--) {
-            var p = confetti[i];
-            p.vy += GRAVITY; p.vx *= p.drag; p.sway += 0.1;
-            p.x += p.vx + Math.sin(p.sway)*1.2; p.y += p.vy;
-            p.rot += p.vr; p.life++;
-            var fade = p.life > p.maxLife*0.7 ? 1 - (p.life - p.maxLife*0.7)/(p.maxLife*0.3) : 1;
-            p.el.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px) rotate(' + p.rot + 'deg)';
-            p.el.style.opacity = fade.toFixed(2);
-            if (p.life >= p.maxLife || p.y > window.innerHeight+60) { p.el.parentNode && p.el.parentNode.removeChild(p.el); confetti.splice(i,1); }
-        }
-        if (confetti.length > 0) RAF(stepConfetti); else confettiRunning = false;
-    }
-
-    // ================= GAMECUBE-STYLE "IH" BOOT (no Web Animations API) =================
+    // ================= GAMECUBE-STYLE "IH" BOOT (light: 3 faces, no shadows) =================
     function buildCube(size, hero) {
         var c = document.createElement('div');
         c.style.cssText = 'position:absolute;width:'+size+'px;height:'+size+'px;transform-style:preserve-3d;';
         var s2 = size / 2;
+        // only the 3 faces visible in the isometric view are built
         var faces = hero ? [
-            ['translateZ('+s2+'px)','#8fd0c7'], ['rotateY(180deg) translateZ('+s2+'px)','#6fb3a9'],
-            ['rotateY(90deg) translateZ('+s2+'px)','#7cc3b9'], ['rotateY(-90deg) translateZ('+s2+'px)','#88ccc2'],
-            ['rotateX(90deg) translateZ('+s2+'px)','#cdefe9'], ['rotateX(-90deg) translateZ('+s2+'px)','#63a89e']
+            ['translateZ('+s2+'px)','#8fd0c7'],
+            ['rotateY(90deg) translateZ('+s2+'px)','#7cc3b9'],
+            ['rotateX(90deg) translateZ('+s2+'px)','#cdefe9']
         ] : [
-            ['translateZ('+s2+'px)','#12403c'], ['rotateY(180deg) translateZ('+s2+'px)','#0b2a27'],
-            ['rotateY(90deg) translateZ('+s2+'px)','#0e322e'], ['rotateY(-90deg) translateZ('+s2+'px)','#103a36'],
-            ['rotateX(90deg) translateZ('+s2+'px)','#1f7a6f'], ['rotateX(-90deg) translateZ('+s2+'px)','#081f1d']
+            ['translateZ('+s2+'px)','#12403c'],
+            ['rotateY(90deg) translateZ('+s2+'px)','#0e322e'],
+            ['rotateX(90deg) translateZ('+s2+'px)','#1f7a6f']
         ];
         for (var i = 0; i < faces.length; i++) {
             var f = document.createElement('div');
             f.style.cssText = 'position:absolute;width:'+size+'px;height:'+size+'px;transform:'+faces[i][0]+
-                ';background:'+faces[i][1]+';border:1px solid rgba(0,0,0,.4);box-shadow:inset 0 0 14px rgba(255,255,255,.18);';
+                ';background:'+faces[i][1]+';border:1px solid rgba(0,0,0,.45);';
             c.appendChild(f);
         }
         return c;
@@ -210,7 +165,6 @@
             var ox = -(COLS*S)/2 + S/2, oy = -(ROWS*S)/2 + S/2;
             function pos(col, row) { return [ox + col*S, oy + row*S]; }
 
-            // Blocky "IH"; hero cube fills H top-right slot [6,0] last.
             var cells = [
                 [0,0],[1,0],[2,0],[1,1],[1,2],[1,3],[0,4],[1,4],[2,4],       // I
                 [4,0],[4,1],[6,1],[4,2],[5,2],[6,2],[4,3],[6,3],[4,4],[6,4]  // H
@@ -226,8 +180,8 @@
             var BASE_DUR = 340, STAG = 42;
             var baseTotal = cells.length * STAG + BASE_DUR;
 
-            var hp = pos(6, 0);            // hero target
-            var tx = hp[0], ty = hp[1], sx = ox - 2.5 * S;
+            var hpos = pos(6, 0);
+            var tx = hpos[0], ty = hpos[1], sx = ox - 2.5 * S;
             var hero = buildCube(S, true);
             hero.style.opacity = '0';
             scene.appendChild(hero);
@@ -240,7 +194,6 @@
                 if (finished) return;
                 var t = now() - t0;
 
-                // base tiles drop in
                 for (var i = 0; i < baseCubes.length; i++) {
                     var b = baseCubes[i];
                     var lt = t - b.delay;
@@ -254,7 +207,6 @@
                     b.el.style.transform = 'translate3d(' + b.x + 'px,' + y + 'px,' + z + 'px) scale(' + sc + ')';
                 }
 
-                // hero rolls in
                 if (t >= HERO_START) {
                     var php = clamp((t - HERO_START) / HERO_DUR, 0, 1);
                     var x = sx + (tx - sx) * php;
@@ -264,13 +216,8 @@
                     hero.style.transform = 'translate3d(' + x + 'px,' + yy + 'px,0) rotateZ(' + rot + 'deg)';
                 }
 
-                // settle
-                if (t >= HERO_START + HERO_DUR && !settled) {
-                    settled = true; settleAt = t;
-                    burst(window.innerWidth/2, window.innerHeight/2, 200, 18);
-                }
+                if (t >= HERO_START + HERO_DUR && !settled) { settled = true; settleAt = t; }
 
-                // wordmark slides in (CSS transition, well supported)
                 if (settled && !markShown && t >= settleAt + 120) {
                     markShown = true;
                     mark = document.createElement('div');
@@ -280,13 +227,11 @@
                     mark.innerHTML = '<div style="font-weight:900;font-size:40px;letter-spacing:3px;">INHOUSE</div>' +
                         '<div style="font-weight:400;font-size:17px;letter-spacing:11px;padding-left:11px;margin-top:4px;">COMMERCIAL</div>';
                     overlay.appendChild(mark);
-                    // force reflow then transition to final
                     void mark.offsetWidth;
                     mark.style.opacity = '1';
                     mark.style.transform = 'translateX(-50%) translateX(0)';
                 }
 
-                // fade out and hand off
                 if (settled && t >= settleAt + 1600) {
                     overlay.style.transition = 'opacity .45s';
                     overlay.style.opacity = '0';
@@ -297,15 +242,14 @@
             }
             RAF(frame);
         } catch (err) {
-            finish(); // any failure: skip straight to the bouncing logo
+            finish();
         }
     }
 
-    // Wraps runBoot so a stall/error can never leave the screen blank.
     function safeBoot(onDone) {
         var done = false;
         function fin() { if (done) return; done = true; onDone(); }
-        setTimeout(fin, 12000); // hard failsafe
+        setTimeout(fin, 12000);
         try { runBoot(fin); } catch (e) { fin(); }
     }
 
@@ -313,7 +257,9 @@
     function BouncingLogo() {
         this.logo = document.getElementById('logo');
         this.cornerHitText = document.getElementById('corner-hit-text');
-        this.logoWidth = 460; this.logoHeight = 220;
+        // Bounce box hugs the ACTUAL rendered letters so they hit the real edges
+        this.logoWidth = this.logo.offsetWidth || 520;
+        this.logoHeight = this.logo.offsetHeight || 240;
         this.x = Math.random() * (window.innerWidth - this.logoWidth);
         this.y = Math.random() * (window.innerHeight - this.logoHeight);
         var spd = 3;
@@ -376,11 +322,9 @@
         this.celebrating = true; this.paused = true; this.target = null;
         this.cornerHitText.innerHTML = c.name;
         this.cornerHitText.style.opacity = '1';
-        burst(c.x + this.logoWidth/2, c.y + this.logoHeight/2, 260, 20);
         this.vx = c.x === 0 ? Math.abs(this.vx) : -Math.abs(this.vx);
         this.vy = c.y === 0 ? Math.abs(this.vy) : -Math.abs(this.vy);
         safeBoot(function () {
-            burst(window.innerWidth/2, window.innerHeight/2, 300, 22);
             self.cornerHitText.style.opacity = '0';
             self.celebrating = false; self.paused = false; self.loop();
         });
@@ -391,9 +335,28 @@
         this.y = Math.min(this.y, window.innerHeight - this.logoHeight);
     };
 
+    // Measure the real text and size the bounce box to fit it snugly.
+    function fitLogoToText() {
+        try {
+            var tmp = document.createElement('div');
+            tmp.style.cssText = "position:absolute;left:-99999px;top:0;white-space:nowrap;line-height:1;" +
+                "font-family:'Arial Black','Arial Bold',Arial,Helvetica,sans-serif;";
+            tmp.innerHTML =
+                '<div style="font-size:100px;font-weight:900;letter-spacing:2px;">INHOUSE</div>' +
+                '<div style="font-size:36px;font-weight:900;letter-spacing:16px;padding-left:16px;margin-top:10px;">COMMERCIAL</div>';
+            document.body.appendChild(tmp);
+            var w = Math.max(tmp.children[0].offsetWidth, tmp.children[1].offsetWidth);
+            var h = tmp.children[0].offsetHeight + 10 + tmp.children[1].offsetHeight;
+            document.body.removeChild(tmp);
+            var logo = document.getElementById('logo');
+            logo.style.width = (Math.ceil(w) + 8) + 'px';
+            logo.style.height = (Math.ceil(h) + 8) + 'px';
+        } catch (e) {}
+    }
+
     // ================= START =================
     function start() {
-        try { buildText(); } catch (e) {}
+        try { buildText(); fitLogoToText(); } catch (e) {}
         safeBoot(function () { try { new BouncingLogo(); } catch (e) {} });
     }
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
