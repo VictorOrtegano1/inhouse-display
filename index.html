@@ -6,15 +6,14 @@
 <title>INHOUSE COMMERCIAL - 3D Letters</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; }
     body {
         background: #000;
         overflow: hidden;
-        height: 100vh;
-        width: 100vw;
         cursor: none;
         perspective: 1400px;
     }
-    .container { position: relative; width: 100%; height: 100vh; }
+    .container { position: relative; width: 100%; height: 100%; }
 
     .logo {
         position: absolute;
@@ -27,7 +26,7 @@
 
     .text3d {
         position: absolute;
-        inset: 0;
+        top: 0; left: 0; right: 0; bottom: 0;
         transform-style: preserve-3d;
         animation: spin 8s infinite linear;
     }
@@ -37,7 +36,8 @@
     }
 
     .layer {
-        position: absolute; inset: 0;
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         transform-style: preserve-3d;
@@ -47,13 +47,13 @@
     .line1 { font-size: 92px; font-weight: 900; letter-spacing: 3px; }
     .line2 { font-size: 34px; font-weight: 700; letter-spacing: 20px; margin-top: 10px; padding-left: 20px; }
 
-    .confetti-piece { position: fixed; pointer-events: none; z-index: 600; will-change: transform; }
+    .confetti-piece { position: fixed; pointer-events: none; z-index: 600; }
 
     #corner-hit-text {
         position: fixed; top: 90px; left: 50%; transform: translateX(-50%);
         color: #ffff00; font-family: 'Arial Black', sans-serif; font-size: 28px;
         text-align: center; opacity: 0; pointer-events: none; z-index: 700;
-        transition: opacity .2s; text-shadow: 0 0 16px currentColor;
+        transition: opacity .2s; text-shadow: 0 0 16px #ffff00;
     }
 </style>
 </head>
@@ -66,68 +66,79 @@
 <div id="corner-hit-text"></div>
 
 <script>
-    // ---- Build the extruded 3D text out of stacked slices ----
-    const DEPTH = 34, SLICE = 1.6;
-    const text3d = document.getElementById('text3d');
+    // ---- Polyfills / helpers for older TV browsers (LG webOS etc.) ----
+    if (!Math.hypot) {
+        Math.hypot = function () {
+            var s = 0, i;
+            for (i = 0; i < arguments.length; i++) s += arguments[i] * arguments[i];
+            return Math.sqrt(s);
+        };
+    }
+    var RAF = window.requestAnimationFrame ||
+              function (cb) { return setTimeout(function () { cb(Date.now()); }, 16); };
+    function now() { return Date.now(); }
+    function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+    function easeOutBack(t) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t-1, 3) + c1 * Math.pow(t-1, 2); }
+
+    // ================= 3D TEXT =================
+    var DEPTH = 34, SLICE = 1.6;
+    var text3d = document.getElementById('text3d');
 
     function buildText() {
         text3d.innerHTML = '';
-        for (let i = DEPTH; i >= 0; i--) {
-            const layer = document.createElement('div');
+        for (var i = DEPTH; i >= 0; i--) {
+            var layer = document.createElement('div');
             layer.className = 'layer';
-            layer.style.transform = `translateZ(${-i * SLICE}px)`;
-            layer.dataset.depth = (i / DEPTH).toFixed(3);
-            layer.dataset.face = i === 0 ? '1' : '0';
-            layer.innerHTML = `<div class="line1">INHOUSE</div><div class="line2">COMMERCIAL</div>`;
+            layer.style.transform = 'translateZ(' + (-i * SLICE) + 'px)';
+            layer.setAttribute('data-depth', (i / DEPTH).toFixed(3));
+            layer.setAttribute('data-face', i === 0 ? '1' : '0');
+            layer.innerHTML = '<div class="line1">INHOUSE</div><div class="line2">COMMERCIAL</div>';
             text3d.appendChild(layer);
         }
         paintText('#ffffff');
     }
 
-    // Gradient look: bright face, extrusion fading into a darker side wall.
     function paintText(hex) {
-        const isWhite = hex.toLowerCase() === '#ffffff';
-        text3d.querySelectorAll('.layer').forEach(layer => {
-            const t = parseFloat(layer.dataset.depth);
-            if (layer.dataset.face === '1') {
+        var isWhite = hex.toLowerCase() === '#ffffff';
+        var layers = text3d.querySelectorAll('.layer');
+        for (var i = 0; i < layers.length; i++) {
+            var layer = layers[i];
+            var t = parseFloat(layer.getAttribute('data-depth'));
+            if (layer.getAttribute('data-face') === '1') {
                 layer.style.color = hex;
-                layer.style.textShadow = isWhite
-                    ? '0 0 6px rgba(0,0,0,.4)'
-                    : '0 0 16px rgba(255,255,255,.6)';   // glow keeps the dark state readable
+                layer.style.textShadow = isWhite ? '0 0 6px rgba(0,0,0,.4)' : '0 0 16px rgba(255,255,255,.6)';
             } else {
                 layer.style.color = shade(hex, 0.62 - t * 0.5);
                 layer.style.textShadow = 'none';
             }
-        });
+        }
     }
     function shade(hex, factor) {
-        if (hex.toLowerCase() === '#ffffff') hex = '#8fb7b0'; // teal side wall for the white face
-        const r = Math.round(parseInt(hex.slice(1,3),16) * factor);
-        const g = Math.round(parseInt(hex.slice(3,5),16) * factor);
-        const b = Math.round(parseInt(hex.slice(5,7),16) * factor);
-        return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+        if (hex.toLowerCase() === '#ffffff') hex = '#8fb7b0';
+        var r = Math.round(parseInt(hex.slice(1,3),16) * factor);
+        var g = Math.round(parseInt(hex.slice(3,5),16) * factor);
+        var b = Math.round(parseInt(hex.slice(5,7),16) * factor);
+        return '#' + p2(r) + p2(g) + p2(b);
     }
+    function p2(n) { var s = n.toString(16); return s.length < 2 ? '0' + s : s; }
 
-    // ================= CONFETTI ENGINE =================
-    const CONFETTI_COLORS = [
-        '#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff',
+    // ================= CONFETTI (requestAnimationFrame only) =================
+    var CONFETTI_COLORS = ['#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff',
         '#ff6600','#ff0066','#6600ff','#00ff66','#ffffff','#12403c',
-        '#ffd700','#ff1493','#7fff00','#00bfff','#ff4500','#adff2f'
-    ];
-    let confetti = [], confettiRunning = false;
+        '#ffd700','#ff1493','#7fff00','#00bfff','#ff4500','#adff2f'];
+    var confetti = [], confettiRunning = false;
     function makePiece(x, y, angle, speed) {
-        const el = document.createElement('div');
+        var el = document.createElement('div');
         el.className = 'confetti-piece';
-        const shape = Math.random();
-        let w, h, br;
-        if (shape < 0.34) { w = h = Math.random()*14+5; br = '2px'; }
-        else if (shape < 0.67) { w = Math.random()*22+8; h = Math.random()*10+4; br = '1px'; }
+        var shp = Math.random(), w, h, br;
+        if (shp < 0.34) { w = h = Math.random()*14+5; br = '2px'; }
+        else if (shp < 0.67) { w = Math.random()*22+8; h = Math.random()*10+4; br = '1px'; }
         else { w = h = Math.random()*12+5; br = '50%'; }
         el.style.width = w+'px'; el.style.height = h+'px'; el.style.borderRadius = br;
         el.style.background = CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)];
         el.style.left = '0px'; el.style.top = '0px';
         document.body.appendChild(el);
-        return { el, x, y,
+        return { el:el, x:x, y:y,
             vx: Math.cos(angle)*speed + (Math.random()-0.5)*3,
             vy: Math.sin(angle)*speed,
             rot: Math.random()*360, vr: (Math.random()-0.5)*40,
@@ -135,260 +146,261 @@
             maxLife: 220 + Math.random()*160, sway: Math.random()*Math.PI*2 };
     }
     function burst(cx, cy, count, power) {
-        for (let i = 0; i < count; i++) {
-            const angle = Math.random()*Math.PI*2;
-            const speed = Math.random()*power + power*0.25;
+        for (var i = 0; i < count; i++) {
+            var angle = Math.random()*Math.PI*2;
+            var speed = Math.random()*power + power*0.25;
             confetti.push(makePiece(cx, cy, angle, speed));
         }
         startConfetti();
     }
-    function startConfetti() {
-        if (confettiRunning) return;
-        confettiRunning = true;
-        requestAnimationFrame(stepConfetti);
-    }
-    const GRAVITY = 0.35;
+    function startConfetti() { if (confettiRunning) return; confettiRunning = true; RAF(stepConfetti); }
+    var GRAVITY = 0.35;
     function stepConfetti() {
-        for (let i = confetti.length-1; i >= 0; i--) {
-            const p = confetti[i];
+        for (var i = confetti.length-1; i >= 0; i--) {
+            var p = confetti[i];
             p.vy += GRAVITY; p.vx *= p.drag; p.sway += 0.1;
             p.x += p.vx + Math.sin(p.sway)*1.2; p.y += p.vy;
             p.rot += p.vr; p.life++;
-            const fade = p.life > p.maxLife*0.7 ? 1 - (p.life - p.maxLife*0.7)/(p.maxLife*0.3) : 1;
-            p.el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${p.rot}deg)`;
+            var fade = p.life > p.maxLife*0.7 ? 1 - (p.life - p.maxLife*0.7)/(p.maxLife*0.3) : 1;
+            p.el.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px) rotate(' + p.rot + 'deg)';
             p.el.style.opacity = fade.toFixed(2);
-            if (p.life >= p.maxLife || p.y > window.innerHeight+60) { p.el.remove(); confetti.splice(i,1); }
+            if (p.life >= p.maxLife || p.y > window.innerHeight+60) { p.el.parentNode && p.el.parentNode.removeChild(p.el); confetti.splice(i,1); }
         }
-        if (confetti.length > 0) requestAnimationFrame(stepConfetti);
-        else confettiRunning = false;
+        if (confetti.length > 0) RAF(stepConfetti); else confettiRunning = false;
     }
 
-    // ================= GAMECUBE "G" LOGO BOOT (repeatable) =================
+    // ================= GAMECUBE-STYLE "IH" BOOT (no Web Animations API) =================
     function buildCube(size, hero) {
-        const c = document.createElement('div');
-        c.style.cssText = `position:absolute;width:${size}px;height:${size}px;transform-style:preserve-3d;`;
-        const s2 = size / 2;
-        // purple GameCube palette; hero cube is a brighter highlight cube
-        const faces = hero ? [
-            [`translateZ(${s2}px)`,'#8fd0c7'], [`rotateY(180deg) translateZ(${s2}px)`,'#6fb3a9'],
-            [`rotateY(90deg) translateZ(${s2}px)`,'#7cc3b9'], [`rotateY(-90deg) translateZ(${s2}px)`,'#88ccc2'],
-            [`rotateX(90deg) translateZ(${s2}px)`,'#cdefe9'], [`rotateX(-90deg) translateZ(${s2}px)`,'#63a89e']
+        var c = document.createElement('div');
+        c.style.cssText = 'position:absolute;width:'+size+'px;height:'+size+'px;transform-style:preserve-3d;';
+        var s2 = size / 2;
+        var faces = hero ? [
+            ['translateZ('+s2+'px)','#8fd0c7'], ['rotateY(180deg) translateZ('+s2+'px)','#6fb3a9'],
+            ['rotateY(90deg) translateZ('+s2+'px)','#7cc3b9'], ['rotateY(-90deg) translateZ('+s2+'px)','#88ccc2'],
+            ['rotateX(90deg) translateZ('+s2+'px)','#cdefe9'], ['rotateX(-90deg) translateZ('+s2+'px)','#63a89e']
         ] : [
-            [`translateZ(${s2}px)`,'#12403c'], [`rotateY(180deg) translateZ(${s2}px)`,'#0b2a27'],
-            [`rotateY(90deg) translateZ(${s2}px)`,'#0e322e'], [`rotateY(-90deg) translateZ(${s2}px)`,'#103a36'],
-            [`rotateX(90deg) translateZ(${s2}px)`,'#1f7a6f'], [`rotateX(-90deg) translateZ(${s2}px)`,'#081f1d']
+            ['translateZ('+s2+'px)','#12403c'], ['rotateY(180deg) translateZ('+s2+'px)','#0b2a27'],
+            ['rotateY(90deg) translateZ('+s2+'px)','#0e322e'], ['rotateY(-90deg) translateZ('+s2+'px)','#103a36'],
+            ['rotateX(90deg) translateZ('+s2+'px)','#1f7a6f'], ['rotateX(-90deg) translateZ('+s2+'px)','#081f1d']
         ];
-        faces.forEach(([tf,col]) => {
-            const f = document.createElement('div');
-            f.style.cssText =
-                `position:absolute;width:${size}px;height:${size}px;transform:${tf};background:${col};` +
-                `border:1px solid rgba(0,0,0,.4);box-shadow:inset 0 0 14px rgba(255,255,255,.18);`;
+        for (var i = 0; i < faces.length; i++) {
+            var f = document.createElement('div');
+            f.style.cssText = 'position:absolute;width:'+size+'px;height:'+size+'px;transform:'+faces[i][0]+
+                ';background:'+faces[i][1]+';border:1px solid rgba(0,0,0,.4);box-shadow:inset 0 0 14px rgba(255,255,255,.18);';
             c.appendChild(f);
-        });
+        }
         return c;
     }
 
-    function playGameCube() {
-        return new Promise(resolve => {
-            const overlay = document.createElement('div');
-            overlay.style.cssText =
-                'position:fixed;inset:0;z-index:500;background:#000;overflow:hidden;perspective:1200px;';
-            const scene = document.createElement('div');
-            scene.style.cssText =
-                'position:absolute;left:50%;top:50%;transform-style:preserve-3d;' +
+    // Runs the boot; ALWAYS calls onDone exactly once, even on error.
+    function runBoot(onDone) {
+        var finished = false;
+        function finish() { if (finished) return; finished = true; try { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); } catch (e) {} onDone(); }
+        var overlay = null;
+        try {
+            overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:500;background:#000;overflow:hidden;perspective:1200px;';
+            var scene = document.createElement('div');
+            scene.style.cssText = 'position:absolute;left:50%;top:50%;transform-style:preserve-3d;' +
                 'transform:translate(-50%,-50%) rotateX(-26deg) rotateY(-37deg);';
             overlay.appendChild(scene);
             document.body.appendChild(overlay);
 
-            const S = 42;
-            const COLS = 7, ROWS = 5;
-            const ox = -(COLS * S) / 2 + S / 2;
-            const oy = -(ROWS * S) / 2 + S / 2;
-            const pos = (col, row) => [ox + col * S, oy + row * S];
+            var S = 42, COLS = 7, ROWS = 5;
+            var ox = -(COLS*S)/2 + S/2, oy = -(ROWS*S)/2 + S/2;
+            function pos(col, row) { return [ox + col*S, oy + row*S]; }
 
-            // Blocky "IH" — hero cube fills the top-right corner of the H last.
-            const cells = [
-                // I  (cols 0-2)
-                [0,0],[1,0],[2,0],
-                [1,1],
-                [1,2],
-                [1,3],
-                [0,4],[1,4],[2,4],
-                // H  (cols 4-6), minus the top-right hero slot [6,0]
-                [4,0],
-                [4,1],[6,1],
-                [4,2],[5,2],[6,2],
-                [4,3],[6,3],
-                [4,4],[6,4]
+            // Blocky "IH"; hero cube fills H top-right slot [6,0] last.
+            var cells = [
+                [0,0],[1,0],[2,0],[1,1],[1,2],[1,3],[0,4],[1,4],[2,4],       // I
+                [4,0],[4,1],[6,1],[4,2],[5,2],[6,2],[4,3],[6,3],[4,4],[6,4]  // H
             ];
-
-            // 1) tiles drop into place, staggered
-            cells.forEach(([col,row], i) => {
-                const [x,y] = pos(col,row);
-                const cube = buildCube(S, false);
-                cube.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+            var baseCubes = [];
+            for (var i = 0; i < cells.length; i++) {
+                var pp = pos(cells[i][0], cells[i][1]);
+                var cube = buildCube(S, false);
+                cube.style.opacity = '0';
                 scene.appendChild(cube);
-                cube.animate([
-                    { transform:`translate3d(${x}px, ${y-260}px, 200px) scale(.2)`, opacity:0 },
-                    { transform:`translate3d(${x}px, ${y}px, 0) scale(1)`, opacity:1 }
-                ], { duration:340, delay:i*42, easing:'cubic-bezier(.34,1.45,.6,1)', fill:'both' });
-            });
+                baseCubes.push({ el: cube, x: pp[0], y: pp[1], delay: i * 42 });
+            }
+            var BASE_DUR = 340, STAG = 42;
+            var baseTotal = cells.length * STAG + BASE_DUR;
 
-            const baseTotal = cells.length * 42 + 340;
+            var hp = pos(6, 0);            // hero target
+            var tx = hp[0], ty = hp[1], sx = ox - 2.5 * S;
+            var hero = buildCube(S, true);
+            hero.style.opacity = '0';
+            scene.appendChild(hero);
+            var HERO_START = baseTotal + 60, HERO_DUR = 950;
 
-            // 2) hero cube rolls in along the top and drops into the slot (0,4 col? top-right)
-            const [tx, ty] = pos(6, 0);          // top-right slot of the H
-            const sx = ox - 2.5 * S;
-            setTimeout(() => {
-                const hero = buildCube(S, true);
-                scene.appendChild(hero);
-                const roll = hero.animate([
-                    { transform:`translate3d(${sx}px, ${ty-30}px, 0) rotateZ(0deg)`, opacity:1 },
-                    { transform:`translate3d(${(sx+tx)/2}px, ${ty-140}px, 0) rotateZ(360deg)`, offset:.5 },
-                    { transform:`translate3d(${tx}px, ${ty-10}px, 0) rotateZ(700deg)`, offset:.85 },
-                    { transform:`translate3d(${tx}px, ${ty}px, 0) rotateZ(720deg)`, opacity:1 }
-                ], { duration:950, easing:'cubic-bezier(.3,.8,.35,1)', fill:'both' });
+            var mark = null, markShown = false;
+            var t0 = now(), settled = false, settleAt = 0;
 
-                roll.finished.then(() => {
-                    // settle: confetti pop + logo squash
+            function frame() {
+                if (finished) return;
+                var t = now() - t0;
+
+                // base tiles drop in
+                for (var i = 0; i < baseCubes.length; i++) {
+                    var b = baseCubes[i];
+                    var lt = t - b.delay;
+                    if (lt <= 0) continue;
+                    var p = clamp(lt / BASE_DUR, 0, 1);
+                    var e = easeOutBack(p);
+                    var y = b.y - 260 + 260 * e;
+                    var z = 200 * (1 - e);
+                    var sc = 0.2 + 0.8 * e;
+                    b.el.style.opacity = clamp(p * 1.6, 0, 1).toFixed(2);
+                    b.el.style.transform = 'translate3d(' + b.x + 'px,' + y + 'px,' + z + 'px) scale(' + sc + ')';
+                }
+
+                // hero rolls in
+                if (t >= HERO_START) {
+                    var php = clamp((t - HERO_START) / HERO_DUR, 0, 1);
+                    var x = sx + (tx - sx) * php;
+                    var yy = (ty - 30) + (30) * php - 150 * Math.sin(php * Math.PI);
+                    var rot = 720 * php;
+                    hero.style.opacity = '1';
+                    hero.style.transform = 'translate3d(' + x + 'px,' + yy + 'px,0) rotateZ(' + rot + 'deg)';
+                }
+
+                // settle
+                if (t >= HERO_START + HERO_DUR && !settled) {
+                    settled = true; settleAt = t;
                     burst(window.innerWidth/2, window.innerHeight/2, 200, 18);
-                    scene.animate([
-                        { transform:'translate(-50%,-50%) rotateX(-26deg) rotateY(-37deg) scale(1)' },
-                        { transform:'translate(-50%,-50%) rotateX(-26deg) rotateY(-37deg) scale(1.06)' },
-                        { transform:'translate(-50%,-50%) rotateX(-26deg) rotateY(-37deg) scale(1)' }
-                    ], { duration:400, easing:'ease-out' });
+                }
 
-                    // wordmark slides in from the left, like "NINTENDO GAMECUBE"
-                    const mark = document.createElement('div');
-                    mark.style.cssText =
-                        'position:absolute;left:50%;top:calc(50% + 175px);transform:translateX(-50%);' +
-                        'text-align:center;color:#fff;font-family:Arial,Helvetica,sans-serif;white-space:nowrap;' +
-                        'overflow:hidden;';
-                    mark.innerHTML =
-                        '<div style="font-weight:900;font-size:40px;letter-spacing:3px;">INHOUSE</div>' +
+                // wordmark slides in (CSS transition, well supported)
+                if (settled && !markShown && t >= settleAt + 120) {
+                    markShown = true;
+                    mark = document.createElement('div');
+                    mark.style.cssText = 'position:absolute;left:50%;top:60%;text-align:center;color:#fff;' +
+                        'font-family:Arial,Helvetica,sans-serif;white-space:nowrap;opacity:0;' +
+                        'transform:translateX(-50%) translateX(-160px);transition:opacity .6s, transform .6s;';
+                    mark.innerHTML = '<div style="font-weight:900;font-size:40px;letter-spacing:3px;">INHOUSE</div>' +
                         '<div style="font-weight:400;font-size:17px;letter-spacing:11px;padding-left:11px;margin-top:4px;">COMMERCIAL</div>';
                     overlay.appendChild(mark);
-                    mark.animate([
-                        { opacity:0, transform:'translateX(-50%) translateX(-160px)' },
-                        { opacity:1, transform:'translateX(-50%) translateX(0)' }
-                    ], { duration:600, delay:150, easing:'cubic-bezier(.2,.7,.3,1)', fill:'both' });
+                    // force reflow then transition to final
+                    void mark.offsetWidth;
+                    mark.style.opacity = '1';
+                    mark.style.transform = 'translateX(-50%) translateX(0)';
+                }
 
-                    setTimeout(() => {
-                        overlay.style.transition = 'opacity .45s';
-                        overlay.style.opacity = '0';
-                        setTimeout(() => { overlay.remove(); resolve(); }, 480);
-                    }, 1500);
-                });
-            }, baseTotal + 60);
-        });
+                // fade out and hand off
+                if (settled && t >= settleAt + 1600) {
+                    overlay.style.transition = 'opacity .45s';
+                    overlay.style.opacity = '0';
+                    setTimeout(finish, 480);
+                    return;
+                }
+                RAF(frame);
+            }
+            RAF(frame);
+        } catch (err) {
+            finish(); // any failure: skip straight to the bouncing logo
+        }
+    }
+
+    // Wraps runBoot so a stall/error can never leave the screen blank.
+    function safeBoot(onDone) {
+        var done = false;
+        function fin() { if (done) return; done = true; onDone(); }
+        setTimeout(fin, 12000); // hard failsafe
+        try { runBoot(fin); } catch (e) { fin(); }
     }
 
     // ================= BOUNCING LOGO =================
-    class BouncingLogo {
-        constructor() {
-            this.logo = document.getElementById('logo');
-            this.cornerHitText = document.getElementById('corner-hit-text');
-            this.logoWidth = 460; this.logoHeight = 220;
-            this.x = Math.random() * (window.innerWidth - this.logoWidth);
-            this.y = Math.random() * (window.innerHeight - this.logoHeight);
-            const spd = 3;
-            this.vx = (Math.random() > .5 ? 1 : -1) * spd;
-            this.vy = (Math.random() > .5 ? 1 : -1) * spd;
-            this.colors = ['#ffffff', '#12403c'];
-            this.currentColorIndex = 0;
-            this.paused = false;
-            this.celebrating = false;
-            this.target = null; // when set, the logo is steering into a corner
-            this.init();
-        }
-        init() {
-            this.logo.style.display = 'block';
-            this.updatePosition();
-            paintText(this.colors[this.currentColorIndex]);
-            this.animate();
-            window.addEventListener('resize', () => this.handleResize());
-            // Every 40s, aim straight at a corner so it TRULY travels there and hits it
-            this.timer = setInterval(() => this.aimAtCorner(), 40000);
-        }
-        updatePosition() { this.logo.style.left = this.x+'px'; this.logo.style.top = this.y+'px'; }
-        speed() { return Math.hypot(this.vx, this.vy) || 3; }
-        aimAtCorner() {
-            if (this.paused || this.celebrating || this.target) return;
-            const maxX = window.innerWidth - this.logoWidth;
-            const maxY = window.innerHeight - this.logoHeight;
-            const corners = [
-                { x:0,    y:0,    name:'↖ TOP LEFT!' },
-                { x:maxX, y:0,    name:'↗ TOP RIGHT!' },
-                { x:0,    y:maxY, name:'↙ BOTTOM LEFT!' },
-                { x:maxX, y:maxY, name:'↘ BOTTOM RIGHT!' }
-            ];
-            const c = corners[Math.floor(Math.random() * corners.length)];
-            const dx = c.x - this.x, dy = c.y - this.y;
-            const mag = Math.hypot(dx, dy) || 1;
-            const spd = this.speed();
-            this.vx = dx / mag * spd;   // point velocity straight at the corner
-            this.vy = dy / mag * spd;
-            this.target = c;
-        }
-        animate() {
-            if (this.paused) return;
-            this.x += this.vx; this.y += this.vy;
-            const maxX = window.innerWidth - this.logoWidth;
-            const maxY = window.innerHeight - this.logoHeight;
-
-            // Arrived at the corner it was aiming for → real corner hit
-            if (this.target &&
-                Math.hypot(this.x - this.target.x, this.y - this.target.y) <= this.speed() + 1) {
-                this.x = this.target.x; this.y = this.target.y;
-                this.updatePosition();
-                this.cornerHit(this.target);
-                return;
-            }
-
-            let hitWall = false;
-            if (this.x <= 0) { this.vx = Math.abs(this.vx); hitWall = true; }
-            else if (this.x >= maxX) { this.vx = -Math.abs(this.vx); hitWall = true; }
-            if (this.y <= 0) { this.vy = Math.abs(this.vy); hitWall = true; }
-            else if (this.y >= maxY) { this.vy = -Math.abs(this.vy); hitWall = true; }
-            this.x = Math.max(0, Math.min(this.x, maxX));
-            this.y = Math.max(0, Math.min(this.y, maxY));
-            this.updatePosition();
-            if (hitWall && !this.target) this.nextColor(); // don't bounce-toggle mid-approach
-            requestAnimationFrame(() => this.animate());
-        }
-        nextColor() {
-            this.currentColorIndex = (this.currentColorIndex + 1) % this.colors.length;
-            paintText(this.colors[this.currentColorIndex]);
-        }
-        cornerHit(c) {
-            this.celebrating = true;
-            this.paused = true;
-            this.target = null;
-            this.cornerHitText.textContent = c.name;
-            this.cornerHitText.style.opacity = '1';
-            burst(c.x + this.logoWidth/2, c.y + this.logoHeight/2, 260, 20);
-            // rebound direction pointing away from the corner for the resume
-            this.vx = c.x === 0 ? Math.abs(this.vx) : -Math.abs(this.vx);
-            this.vy = c.y === 0 ? Math.abs(this.vy) : -Math.abs(this.vy);
-            playGameCube().then(() => {
-                burst(window.innerWidth/2, window.innerHeight/2, 300, 22);
-                this.cornerHitText.style.opacity = '0';
-                this.celebrating = false;
-                this.paused = false;
-                this.animate();
-            });
-        }
-        handleResize() {
-            if (this.paused) return;
-            this.x = Math.min(this.x, window.innerWidth - this.logoWidth);
-            this.y = Math.min(this.y, window.innerHeight - this.logoHeight);
-        }
+    function BouncingLogo() {
+        this.logo = document.getElementById('logo');
+        this.cornerHitText = document.getElementById('corner-hit-text');
+        this.logoWidth = 460; this.logoHeight = 220;
+        this.x = Math.random() * (window.innerWidth - this.logoWidth);
+        this.y = Math.random() * (window.innerHeight - this.logoHeight);
+        var spd = 3;
+        this.vx = (Math.random() > .5 ? 1 : -1) * spd;
+        this.vy = (Math.random() > .5 ? 1 : -1) * spd;
+        this.colors = ['#ffffff', '#12403c'];
+        this.currentColorIndex = 0;
+        this.paused = false; this.celebrating = false; this.target = null;
+        this.init();
     }
+    BouncingLogo.prototype.init = function () {
+        var self = this;
+        this.logo.style.display = 'block';
+        this.updatePosition();
+        paintText(this.colors[this.currentColorIndex]);
+        this.loop();
+        window.addEventListener('resize', function () { self.handleResize(); });
+        this.timer = setInterval(function () { self.aimAtCorner(); }, 40000);
+    };
+    BouncingLogo.prototype.updatePosition = function () { this.logo.style.left = this.x+'px'; this.logo.style.top = this.y+'px'; };
+    BouncingLogo.prototype.speed = function () { return Math.hypot(this.vx, this.vy) || 3; };
+    BouncingLogo.prototype.aimAtCorner = function () {
+        if (this.paused || this.celebrating || this.target) return;
+        var maxX = window.innerWidth - this.logoWidth, maxY = window.innerHeight - this.logoHeight;
+        var corners = [
+            { x:0, y:0, name:'↖ TOP LEFT!' }, { x:maxX, y:0, name:'↗ TOP RIGHT!' },
+            { x:0, y:maxY, name:'↙ BOTTOM LEFT!' }, { x:maxX, y:maxY, name:'↘ BOTTOM RIGHT!' }
+        ];
+        var c = corners[Math.floor(Math.random()*corners.length)];
+        var dx = c.x - this.x, dy = c.y - this.y, mag = Math.hypot(dx, dy) || 1, spd = this.speed();
+        this.vx = dx/mag*spd; this.vy = dy/mag*spd; this.target = c;
+    };
+    BouncingLogo.prototype.loop = function () {
+        var self = this;
+        if (this.paused) return;
+        this.x += this.vx; this.y += this.vy;
+        var maxX = window.innerWidth - this.logoWidth, maxY = window.innerHeight - this.logoHeight;
 
-    window.addEventListener('load', () => {
-        buildText();
-        playGameCube().then(() => new BouncingLogo());
-    });
+        if (this.target && Math.hypot(this.x - this.target.x, this.y - this.target.y) <= this.speed() + 1) {
+            this.x = this.target.x; this.y = this.target.y; this.updatePosition();
+            this.cornerHit(this.target); return;
+        }
+        var hitWall = false;
+        if (this.x <= 0) { this.vx = Math.abs(this.vx); hitWall = true; }
+        else if (this.x >= maxX) { this.vx = -Math.abs(this.vx); hitWall = true; }
+        if (this.y <= 0) { this.vy = Math.abs(this.vy); hitWall = true; }
+        else if (this.y >= maxY) { this.vy = -Math.abs(this.vy); hitWall = true; }
+        this.x = Math.max(0, Math.min(this.x, maxX));
+        this.y = Math.max(0, Math.min(this.y, maxY));
+        this.updatePosition();
+        if (hitWall && !this.target) this.nextColor();
+        RAF(function () { self.loop(); });
+    };
+    BouncingLogo.prototype.nextColor = function () {
+        this.currentColorIndex = (this.currentColorIndex + 1) % this.colors.length;
+        paintText(this.colors[this.currentColorIndex]);
+    };
+    BouncingLogo.prototype.cornerHit = function (c) {
+        var self = this;
+        this.celebrating = true; this.paused = true; this.target = null;
+        this.cornerHitText.innerHTML = c.name;
+        this.cornerHitText.style.opacity = '1';
+        burst(c.x + this.logoWidth/2, c.y + this.logoHeight/2, 260, 20);
+        this.vx = c.x === 0 ? Math.abs(this.vx) : -Math.abs(this.vx);
+        this.vy = c.y === 0 ? Math.abs(this.vy) : -Math.abs(this.vy);
+        safeBoot(function () {
+            burst(window.innerWidth/2, window.innerHeight/2, 300, 22);
+            self.cornerHitText.style.opacity = '0';
+            self.celebrating = false; self.paused = false; self.loop();
+        });
+    };
+    BouncingLogo.prototype.handleResize = function () {
+        if (this.paused) return;
+        this.x = Math.min(this.x, window.innerWidth - this.logoWidth);
+        this.y = Math.min(this.y, window.innerHeight - this.logoHeight);
+    };
+
+    // ================= START =================
+    function start() {
+        try { buildText(); } catch (e) {}
+        safeBoot(function () { try { new BouncingLogo(); } catch (e) {} });
+    }
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        start();
+    } else {
+        window.addEventListener('load', start);
+    }
 </script>
 </body>
 </html>
